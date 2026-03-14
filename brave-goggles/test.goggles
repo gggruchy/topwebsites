@@ -1,0 +1,8 @@
+! name: 1m short (Part 1)
+! description: Rerank results to remove pages found on the top 1m most-viewed websites. List of top sites drawn from tranco-list.eu.
+! public: false
+! author: Connectome
+
+/(?:google\.com|gtld-servers\.net|microsoft\.com|googleapis\.com|facebook\.com|mail\.ru|cloudflare\.com|apple\.com|youtube\.com|amazonaws\.com|gstatic\.com|instagram\.com|akamai\.net|dzen\.ru|fbcdn\.net|office\.com|twitter\.com|linkedin\.com|googlevideo\.com|akamaiedge\.net|googletagmanager\.com|amazon\.com|live\.com|akadns\.net|azure\.com|e2ro\.com|windowsupdate\.com|wikipedia\.org|github\.com|microsoftonline\.com|bing\.com|doubleclick\.net|netflix\.com|googleusercontent\.com|chatgpt\.com)/$discard
+/(?:apple-dns\.net|fastly\.net|domaincontrol\.com|whatsapp\.net|office\.net|workers\.dev|appsflyersdk\.com|aaplimg\.com|keenetic\.io|wordpress\.org|sharepoint\.com|youtu\.be|trafficmanager\.net|digicert\.com|icloud\.com|pinterest\.com|windows\.net|pv-cdn\.net|yahoo\.com|cloudfront\.net|whatsapp\.com|skype\.com|goo\.gl|googlesyndication\.com|x\.com|msn\.com|spotify\.com|tiktok\.com|vimeo\.com|gandi\.net|ripn\.net|ntp\.org|akam\.net|adobe\.com|tiktokcdn\.com|cloudflare\.net|gvt1\.com|telekom\.de)/$discard
+/(?:gvt2\.com|zoom\.us|ytimg\.com|myfritz\.net|roblox\.com|tiktokv\.com|wa\.me|edgekey\.net|googledomains\.com|yandex\.net|nginx\.org|qq\.com|baidu\.com|cloudflare-dns\.com|samsung\.com|bit\.ly|nic\.ru|opera\.com|yandex\.ru|wordpress\.com|nginx\.com|google-analytics\.com|office365\.com|edgesuite\.net|mozilla\.org|sentry\.io|ui\.com|windows\.com|a2z\.com|root-servers\.net|reddit\.com|vedcdnlb\.com|cloud\.microsoft|intuit\.com|okcdn\.ru|cdninstagram\.com|unity3d\.com|googleadservices\.com)/$discard
