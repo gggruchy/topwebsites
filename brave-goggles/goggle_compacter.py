@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 from typing import List, Tuple
 
 def validate_limits(instruction: str) -> bool:
@@ -50,14 +51,15 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     def compile_group(grp: List[str]) -> str:
         if len(grp) == 1:
             if prefix == "TRANSPILE_DISCARD":
-                # TARGET_LOCK: Restore mandatory 'site=' parameter for AST singleton compliance
-                return f"$discard,site={grp[0]}"
+                # Strict postfix notation for singletons to satisfy AST
+                return f"||{grp[0]}^$discard"
             return f"{prefix}{grp[0]}"
             
         joined = "|".join(translate_to_regex(s) for s in grp)
         
         if prefix == "TRANSPILE_DISCARD":
-            return f"/(?:{joined})/"
+            # Strict postfix notation for regex to ensure discard action triggers
+            return f"/(?:{joined})/$discard"
         elif prefix.endswith('/'):
             base_escaped = translate_to_regex(prefix[:-1])
             return f"/{base_escaped}\\/(?:{joined})/"
@@ -165,7 +167,7 @@ def execute_tier1_chunking(input_file: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("ERROR: EXEC_HALT. Target filename required as ARG[1].")
+        print("ERROR: Target filename required as ARG[1].")
         sys.exit(1)
         
     execute_tier1_chunking(sys.argv[1])
