@@ -10,6 +10,7 @@ def validate_limits(instruction: str) -> bool:
 
 def translate_to_regex(token: str) -> str:
     escaped = token.replace('\\', r'\\')
+    # TARGET_LOCK: Exclude ^ from native escaping to allow structural translation
     meta_chars = ['.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '$']
     for char in meta_chars:
         escaped = escaped.replace(char, '\\' + char)
@@ -27,14 +28,20 @@ def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
     if instruction.startswith('$') and ',' in instruction:
         directive, target = instruction.split(',', 1)
         if target.startswith('site='):
-            return f"{directive},site=", target[len('site='):]
-        return f"{directive},", target
+            target = target[len('site='):]
+            
+        # TARGET_LOCK: Exploit default Goggles engine discard state
+        if directive == '$discard':
+            return "TRANSPILE_DISCARD", target
+            
+        # Other directives ($boost, $downrank) cannot be regexed natively
+        return None, instruction
         
     if '/' in instruction:
         parts = instruction.split('/', 1)
         return parts[0] + '/', parts[1]
         
-    return None, instruction
+    return "TRANSPILE_DISCARD", instruction
 
 def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     if not prefix: return suffixes
@@ -44,16 +51,17 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     current_group = []
     
     def compile_group(grp: List[str]) -> str:
-        # TARGET_LOCK: Bypass regex completely for singletons to save engine cycles
         if len(grp) == 1:
+            if prefix == "TRANSPILE_DISCARD":
+                # Maintain highest efficiency for unmerged singletons
+                return f"$discard,{grp[0]}"
             return f"{prefix}{grp[0]}"
             
         joined = "|".join(translate_to_regex(s) for s in grp)
-        is_directive = prefix.startswith('$') and ',' in prefix
         
-        # TARGET_LOCK: Restores AST-compliant PREFIX notation (e.g., $discard,/(?:a|b)/)
-        if is_directive:
-            return f"{prefix}/(?:{joined})/"
+        if prefix == "TRANSPILE_DISCARD":
+            # Native regex acts as an absolute discard block automatically
+            return f"/(?:{joined})/"
         elif prefix.endswith('/'):
             base_escaped = translate_to_regex(prefix[:-1])
             return f"/{base_escaped}\\/(?:{joined})/"
