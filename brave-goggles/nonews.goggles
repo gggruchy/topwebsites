@@ -3,6 +3,8 @@
 ! public: true
 ! author: Ryan Long
 
+$discard,site=medium.com
+
 ! random sites
 $discard,site=techradar.com
 $discard,site=bbc.com
@@ -9408,52 +9410,6 @@ $discard,site=tohodm.com
 $discard,site=nongzhibaike.com
 $discard,site=imangodoc.com
 $discard,site=eliveint.com
-$site=wikipedia.org,boost=3
-$site=github.com,boost=3
-$site=v2ex.com,boost=3
-$site=stackoverflow.com,boost=4
-$site=w3schools.com,boost=4
-/?category=Engineering^$boost=3,site=blog.siftscience.com
-/?category=Engineering^$boost=3,site=blog.venmo.com
-/@InstagramEng^$boost=3,site=engineering.instagram.com
-/@elbrujohalcon^$boost=3,site=medium.com
-/articles^$boost=3,site=michaelgallego.fr
-/ateam^$boost=3,site=planet.mozilla.org
-/b/abhinaba^$boost=3,site=blogs.msdn.com
-/backing-and-hacking^$boost=3,site=kickstarter.com
-/blog.html^$boost=3,site=alexander-hansen.dev
-/blog.html^$boost=3,site=codenameone.com
-/blog.html^$boost=3,site=erlang-solutions.com
-/blog/$boost=3,site=brave.com
-/blog/categories/engineering^$boost=3,site=segment.com
-/blog/category/engineering^$boost=3,site=elastic.co
-/blog/category/engineering^$boost=3,site=github.com
-/blog/category/software-development^$boost=3,site=azavea.com
-/blog/en/category/tech^$boost=3,site=runtastic.com
-/blog/engineering^$boost=3,site=box.com
-/blog/engineering^$boost=3,site=hostinger.com
-/blog/index.html^$boost=3,site=tech.grammarly.com
-/blog/tag/engineering^$boost=3,site=clevertap.com
-/blog/tagged/engineering^$boost=3,site=gocardless.com
-/blog/tags/engineering.html^$boost=3,site=semaphoreci.com
-/blog/topic/engineering^$boost=3,site=product.hubspot.com
-/blog^$boost=3,site=8thlight.com
-/blog^$boost=3,site=adambard.com
-/blog^$boost=3,site=agwa.name
-/blog^$boost=3,site=airbrake.io
-/blog^$boost=3,site=ardanlabs.com
-/blog^$boost=3,site=auth0.com
-/blog^$boost=3,site=backtrace.io
-/blog^$boost=3,site=binary-studio.com
-/blog^$boost=3,site=blablatech.com
-/blog^$boost=3,site=bodunhu.com
-/blog^$boost=3,site=boxever.com
-/blog^$boost=3,site=bradcypert.com
-/blog^$boost=3,site=cockroachlabs.com
-/blog^$boost=3,site=codelitt.com
-/blog^$boost=3,site=collectiveidea.com
-/blog^$boost=3,site=confluent.io
-/blog^$boost=3,site=convox.com
 
 ! clean python
 $downrank=2
@@ -9475,11 +9431,7 @@ $discard,site=go.dev
 $discard,site=elm-lang.org
 $discard,site=pub.dev
 $discard,site=haskell.org
-$boost=10,site=python.org
-$boost=10,site=pypi.org
-/questions/tagged/python/$boost=4,site=stackoverflow.com
-|https://python$boost=4,site=readthedocs.io
-$boost=5,site=medium.com
+
 |https://docs.python.org/2/$downrank=4
 
 
@@ -18408,31 +18360,6 @@ $discard,site=nongzhibaike.com
 $discard,site=imangodoc.com
 $discard,site=eliveint.com
 
-/?category=Engineering^$boost=3,site=blog.siftscience.com
-/?category=Engineering^$boost=3,site=blog.venmo.com
-/@InstagramEng^$boost=3,site=engineering.instagram.com
-/@elbrujohalcon^$boost=3,site=medium.com
-/articles^$boost=3,site=michaelgallego.fr
-/ateam^$boost=3,site=planet.mozilla.org
-/b/abhinaba^$boost=3,site=blogs.msdn.com
-/backing-and-hacking^$boost=3,site=kickstarter.com
-/blog.html^$boost=3,site=alexander-hansen.dev
-/blog.html^$boost=3,site=codenameone.com
-/blog.html^$boost=3,site=erlang-solutions.com
-/blog/$boost=3,site=brave.com
-/blog/categories/engineering^$boost=3,site=segment.com
-/blog/category/engineering^$boost=3,site=elastic.co
-/blog/category/engineering^$boost=3,site=github.com
-/blog/category/software-development^$boost=3,site=azavea.com
-/blog/en/category/tech^$boost=3,site=runtastic.com
-/blog/engineering^$boost=3,site=box.com
-/blog/engineering^$boost=3,site=hostinger.com
-/blog/index.html^$boost=3,site=tech.grammarly.com
-/blog/tag/engineering^$boost=3,site=clevertap.com
-/blog/tagged/engineering^$boost=3,site=gocardless.com
-/blog/tags/engineering.html^$boost=3,site=semaphoreci.com
-/blog/topic/engineering^$boost=3,site=product.hubspot.com
-
 ! name: SEO abusers - Reuploaders or ads
 ! description: Remove sites that reupload software while adding ads or outdated versions, will boost original.
 ! public: true
@@ -18442,9 +18369,7 @@ $discard,site=eliveint.com
 ! issues: https://github.com/Linx-ESP/program-configs/issues
 ! license: GNU AGPL-3.0
 
-! Original sites. Not a recommendation of the software itself.
-! MKVcleaver, mkvtoolnix GUI
-$boost=4,site=sapib.ca 
+
 
 ! Bad reuploaders
 $discard,site=uptodown.com
