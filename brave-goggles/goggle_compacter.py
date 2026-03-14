@@ -1,47 +1,66 @@
 import sys
 import os
 import re
-from collections import defaultdict
-from typing import List
+from typing import List, Tuple
 
 def validate_limits(instruction: str) -> bool:
+    """Enforces absolute character and logic gate ceilings."""
     if len(instruction) > 500: return False
     if instruction.count('*') > 2: return False
     if instruction.count('^') > 2: return False
     return True
 
-def is_structural_safe(instruction: str) -> bool:
-    """Blocks regex mutation of Goggles-specific structural operators."""
-    if instruction.startswith('/') and instruction.endswith('/'): return False
-    if any(op in instruction for op in ['||', '@@', '|', '$']): return False
-    return True
-
 def translate_to_regex(token: str) -> str:
+    """Safely escapes strings while mutating valid operators into regex."""
     escaped = re.escape(token)
     escaped = escaped.replace(r'\*', '.*')
-    # TARGET_LOCK: Apply strict raw string prefix (r'') to the replacement payload
     escaped = escaped.replace(r'\^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
     return escaped
 
-def pack_regex_nodes(prefix: str, suffixes: set) -> List[str]:
-    if not suffixes or suffixes == {""}: 
-        raw_rule = prefix if suffixes == {""} else f"{prefix}/"
-        return [raw_rule] if validate_limits(raw_rule) else []
+def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
+    """
+    Parses structural strings to determine regex mergeability.
+    TARGET_LOCK: Explicitly catches and isolates $discard, for regex combination.
+    """
+    if instruction.startswith('$discard,'):
+        return '$discard,', instruction[len('$discard,'):]
         
-    if len(suffixes) == 1:
-        raw_rule = f"{prefix}/{list(suffixes)[0]}"
-        return [raw_rule] if validate_limits(raw_rule) else []
+    if instruction.startswith('/') and instruction.endswith('/'):
+        return None, instruction
+        
+    if any(op in instruction for op in ['||', '@@', '|', '$']):
+        return None, instruction
+        
+    if '/' in instruction:
+        parts = instruction.split('/', 1)
+        return parts[0] + '/', parts[1]
+        
+    return None, instruction
+
+def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
+    """Compiles string alternations bound by the 500-character ceiling."""
+    if not prefix: return suffixes
+    
+    unique_suffixes = list(dict.fromkeys(suffixes))
+    if len(unique_suffixes) == 1:
+        return [f"{prefix}{unique_suffixes[0]}"]
         
     packed_rules = []
     current_group = []
-    base_escaped_prefix = translate_to_regex(prefix)
     
     def compile_group(grp: List[str]) -> str:
-        if len(grp) == 1: return f"{prefix}/{grp[0]}"
+        if len(grp) == 1: return f"{prefix}{grp[0]}"
         joined = "|".join(translate_to_regex(s) for s in grp)
-        return f"/{base_escaped_prefix}\\/({joined})/"
+        
+        # Maps standard regex syntax for $discard, directives
+        if prefix == '$discard,':
+            return f"{prefix}/({joined})/"
+        elif prefix.endswith('/'):
+            base_escaped = translate_to_regex(prefix[:-1])
+            return f"/{base_escaped}\\/({joined})/"
+        return f"{prefix}({joined})"
 
-    for suffix in sorted(suffixes):
+    for suffix in unique_suffixes:
         current_group.append(suffix)
         test_rule = compile_group(current_group)
         
@@ -57,10 +76,13 @@ def pack_regex_nodes(prefix: str, suffixes: set) -> List[str]:
     return packed_rules
 
 def execute_tier1_chunking(input_file: str):
+    """
+    Executes sequential, top-to-bottom pipeline.
+    Max Bytes: 1.9MB Decimal limit. Max Lines: 100,000.
+    """
     MAX_LINES = 100000
-    MAX_BYTES = 1900000
+    MAX_BYTES = 1900000 
     NEWLINE_BYTES = len(os.linesep.encode('utf-8'))
-    BATCH_LIMIT = 250000
     
     if not os.path.exists(input_file):
         print(f"ERROR: Target '{input_file}' not found.")
@@ -80,29 +102,25 @@ def execute_tier1_chunking(input_file: str):
         current_lines = 0
         current_bytes = 0
 
-    def flush_batch(batch_map: dict, unmergeable_list: List[str]):
+    def write_rule(rule: str):
         nonlocal current_lines, current_bytes
-        
-        def write_rule(rule: str):
-            nonlocal current_lines, current_bytes
-            rule_bytes = len(rule.encode('utf-8')) + NEWLINE_BYTES
-            if current_lines >= MAX_LINES or (current_bytes + rule_bytes) > MAX_BYTES:
-                rotate_io()
-            file_pointer.write(rule + '\n')
-            current_lines += 1
-            current_bytes += rule_bytes
-
-        for rule in unmergeable_list:
-            write_rule(rule)
-
-        for pfx, sfx_set in batch_map.items():
-            for rule in pack_regex_nodes(pfx, sfx_set):
-                write_rule(rule)
+        rule_bytes = len(rule.encode('utf-8')) + NEWLINE_BYTES
+        if current_lines >= MAX_LINES or (current_bytes + rule_bytes) > MAX_BYTES:
+            rotate_io()
+        file_pointer.write(rule + '\n')
+        current_lines += 1
+        current_bytes += rule_bytes
 
     rotate_io()
-    prefix_map = defaultdict(set)
-    unmergeable = []
-    line_count = 0
+    
+    current_prefix = None
+    current_suffixes = []
+    
+    def flush_buffer():
+        if current_suffixes:
+            for rule in pack_regex_nodes(current_prefix, current_suffixes):
+                write_rule(rule)
+            current_suffixes.clear()
 
     with open(input_file, 'r', encoding='utf-8') as f:
         for line in f:
@@ -110,22 +128,16 @@ def execute_tier1_chunking(input_file: str):
             if not clean or clean.startswith('!'): continue
             if not validate_limits(clean): continue
 
-            if is_structural_safe(clean) and '/' in clean:
-                parts = clean.split('/', 1)
-                prefix_map[parts[0]].add(parts[1])
-            else:
-                unmergeable.append(clean)
-
-            line_count += 1
-            if line_count >= BATCH_LIMIT:
-                flush_batch(prefix_map, unmergeable)
-                prefix_map.clear()
-                unmergeable.clear()
-                line_count = 0
+            prefix, suffix = extract_prefix_suffix(clean)
+            
+            # Flushes memory on prefix change to preserve top-to-bottom priority logic
+            if prefix != current_prefix or len(current_suffixes) > 1000:
+                flush_buffer()
+                current_prefix = prefix
                 
-    if prefix_map or unmergeable:
-        flush_batch(prefix_map, unmergeable)
-        
+            current_suffixes.append(suffix)
+                
+    flush_buffer()
     if file_pointer: file_pointer.close()
 
 if __name__ == "__main__":
