@@ -4,43 +4,31 @@ import re
 from typing import List, Tuple
 
 def validate_limits(instruction: str) -> bool:
-    """Enforces absolute character and logic gate ceilings."""
     if len(instruction) > 500: return False
     if instruction.count('*') > 2: return False
     if instruction.count('^') > 2: return False
     return True
 
 def translate_to_regex(token: str) -> str:
-    """Safely escapes strings while mutating valid operators into regex."""
     escaped = re.escape(token)
     escaped = escaped.replace(r'\*', '.*')
     escaped = escaped.replace(r'\^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
     return escaped
 
 def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
-    """
-    Parses structural strings to determine regex mergeability.
-    TARGET_LOCK: Explicitly catches and isolates $discard, for regex combination.
-    """
     if instruction.startswith('$discard,'):
         return '$discard,', instruction[len('$discard,'):]
-        
     if instruction.startswith('/') and instruction.endswith('/'):
         return None, instruction
-        
     if any(op in instruction for op in ['||', '@@', '|', '$']):
         return None, instruction
-        
     if '/' in instruction:
         parts = instruction.split('/', 1)
         return parts[0] + '/', parts[1]
-        
     return None, instruction
 
 def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
-    """Compiles string alternations bound by the 500-character ceiling."""
     if not prefix: return suffixes
-    
     unique_suffixes = list(dict.fromkeys(suffixes))
     if len(unique_suffixes) == 1:
         return [f"{prefix}{unique_suffixes[0]}"]
@@ -51,8 +39,6 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     def compile_group(grp: List[str]) -> str:
         if len(grp) == 1: return f"{prefix}{grp[0]}"
         joined = "|".join(translate_to_regex(s) for s in grp)
-        
-        # Maps standard regex syntax for $discard, directives
         if prefix == '$discard,':
             return f"{prefix}/({joined})/"
         elif prefix.endswith('/'):
@@ -63,7 +49,6 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     for suffix in unique_suffixes:
         current_group.append(suffix)
         test_rule = compile_group(current_group)
-        
         if not validate_limits(test_rule):
             current_group.pop()
             if current_group:
@@ -72,14 +57,22 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
             
     if current_group:
         packed_rules.append(compile_group(current_group))
-        
     return packed_rules
 
+def extract_metadata(filepath: str) -> List[str]:
+    """Isolates contiguous metadata block at line 0."""
+    meta_block = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            clean = line.strip()
+            if not clean: continue
+            if clean.startswith('!'):
+                meta_block.append(clean)
+            else:
+                break
+    return meta_block
+
 def execute_tier1_chunking(input_file: str):
-    """
-    Executes sequential, top-to-bottom pipeline.
-    Max Bytes: 1.9MB Decimal limit. Max Lines: 100,000.
-    """
     MAX_LINES = 100000
     MAX_BYTES = 1900000 
     NEWLINE_BYTES = len(os.linesep.encode('utf-8'))
@@ -88,6 +81,7 @@ def execute_tier1_chunking(input_file: str):
         print(f"ERROR: Target '{input_file}' not found.")
         sys.exit(1)
 
+    base_metadata = extract_metadata(input_file)
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     chunk_index = 1
     current_lines = 0
@@ -98,9 +92,22 @@ def execute_tier1_chunking(input_file: str):
         nonlocal file_pointer, chunk_index, current_lines, current_bytes
         if file_pointer: file_pointer.close()
         file_pointer = open(f"{base_name}_part{chunk_index}.goggles", 'w', encoding='utf-8', newline='\n')
-        chunk_index += 1
+        
         current_lines = 0
         current_bytes = 0
+        
+        # TARGET_LOCK: Inject metadata into new chunk. Mutate name to prevent import collision.
+        for meta in base_metadata:
+            mutated_meta = meta
+            if meta.lower().startswith('! name:'):
+                mutated_meta = f"{meta} (Part {chunk_index})"
+                
+            rule_bytes = len(mutated_meta.encode('utf-8')) + NEWLINE_BYTES
+            file_pointer.write(mutated_meta + '\n')
+            current_lines += 1
+            current_bytes += rule_bytes
+            
+        chunk_index += 1
 
     def write_rule(rule: str):
         nonlocal current_lines, current_bytes
@@ -130,7 +137,6 @@ def execute_tier1_chunking(input_file: str):
 
             prefix, suffix = extract_prefix_suffix(clean)
             
-            # Flushes memory on prefix change to preserve top-to-bottom priority logic
             if prefix != current_prefix or len(current_suffixes) > 1000:
                 flush_buffer()
                 current_prefix = prefix
@@ -143,7 +149,6 @@ def execute_tier1_chunking(input_file: str):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("ERROR: EXEC_HALT. Target filename required as ARG[1].")
-        print("USAGE: python script.py <filename.goggles>")
         sys.exit(1)
         
     execute_tier1_chunking(sys.argv[1])
