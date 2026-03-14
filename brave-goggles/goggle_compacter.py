@@ -1,86 +1,12 @@
 import sys
 import os
-import re
-from typing import List, Tuple
+from typing import List
 
 def validate_limits(instruction: str) -> bool:
     if len(instruction) > 500: return False
     if instruction.count('*') > 2: return False
     if instruction.count('^') > 2: return False
     return True
-
-def translate_to_regex(token: str) -> str:
-    escaped = token.replace('\\', r'\\')
-    meta_chars = ['.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '$']
-    for char in meta_chars:
-        escaped = escaped.replace(char, '\\' + char)
-    escaped = escaped.replace('*', '.*')
-    escaped = escaped.replace('^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
-    return escaped
-
-def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
-    if instruction.startswith('/') and instruction.endswith('/'):
-        return None, instruction
-        
-    if any(op in instruction for op in ['||', '@@', '|']) and not instruction.startswith('$'):
-        return None, instruction
-        
-    if instruction.startswith('$') and ',' in instruction:
-        directive, target = instruction.split(',', 1)
-        if target.startswith('site='):
-            target = target[len('site='):]
-            
-        if directive == '$discard':
-            return "TRANSPILE_DISCARD", target
-            
-        return None, instruction
-        
-    if '/' in instruction:
-        parts = instruction.split('/', 1)
-        return parts[0] + '/', parts[1]
-        
-    return "TRANSPILE_DISCARD", instruction
-
-def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
-    if not prefix: return suffixes
-    
-    unique_suffixes = list(dict.fromkeys(suffixes))
-    packed_rules = []
-    current_group = []
-    
-    def compile_group(grp: List[str]) -> str:
-        if len(grp) == 1:
-            if prefix == "TRANSPILE_DISCARD":
-                # Strict postfix notation for singletons to satisfy AST
-                return f"||{grp[0]}^$discard"
-            return f"{prefix}{grp[0]}"
-            
-        joined = "|".join(translate_to_regex(s) for s in grp)
-        
-        if prefix == "TRANSPILE_DISCARD":
-            # Strict postfix notation for regex to ensure discard action triggers
-            return f"/(?:{joined})/$discard"
-        elif prefix.endswith('/'):
-            base_escaped = translate_to_regex(prefix[:-1])
-            return f"/{base_escaped}\\/(?:{joined})/"
-        else:
-            base_escaped = translate_to_regex(prefix)
-            return f"/{base_escaped}(?:{joined})/"
-
-    for suffix in unique_suffixes:
-        current_group.append(suffix)
-        test_rule = compile_group(current_group)
-        
-        if not validate_limits(test_rule):
-            current_group.pop()
-            if current_group:
-                packed_rules.append(compile_group(current_group))
-            current_group = [suffix]
-            
-    if current_group:
-        packed_rules.append(compile_group(current_group))
-        
-    return packed_rules
 
 def extract_metadata(filepath: str) -> List[str]:
     meta_block = []
@@ -91,6 +17,20 @@ def extract_metadata(filepath: str) -> List[str]:
             if clean.startswith('!'): meta_block.append(clean)
             else: break
     return meta_block
+
+def format_instruction(clean_line: str) -> str:
+    """
+    TARGET_LOCK: Enforces strict Adblock syntax over regex to guarantee
+    AST parser acceptance, bypassing the ReDoS complexity ceiling and 
+    maximizing engine Trie-hash performance.
+    """
+    if clean_line.startswith('$discard,'):
+        target = clean_line[len('$discard,'):]
+        if target.startswith('site='):
+            target = target[len('site='):]
+        return f"||{target}^$discard"
+        
+    return clean_line
 
 def execute_tier1_chunking(input_file: str):
     MAX_LINES = 100000
@@ -128,25 +68,7 @@ def execute_tier1_chunking(input_file: str):
             
         chunk_index += 1
 
-    def write_rule(rule: str):
-        nonlocal current_lines, current_bytes
-        rule_bytes = len(rule.encode('utf-8')) + NEWLINE_BYTES
-        if current_lines >= MAX_LINES or (current_bytes + rule_bytes) > MAX_BYTES:
-            rotate_io()
-        file_pointer.write(rule + '\n')
-        current_lines += 1
-        current_bytes += rule_bytes
-
     rotate_io()
-    
-    current_prefix = None
-    current_suffixes = []
-    
-    def flush_buffer():
-        if current_suffixes:
-            for rule in pack_regex_nodes(current_prefix, current_suffixes):
-                write_rule(rule)
-            current_suffixes.clear()
 
     with open(input_file, 'r', encoding='utf-8') as f:
         for line in f:
@@ -154,20 +76,21 @@ def execute_tier1_chunking(input_file: str):
             if not clean or clean.startswith('!'): continue
             if not validate_limits(clean): continue
 
-            prefix, suffix = extract_prefix_suffix(clean)
+            formatted_rule = format_instruction(clean)
+            rule_bytes = len(formatted_rule.encode('utf-8')) + NEWLINE_BYTES
             
-            if prefix != current_prefix or len(current_suffixes) > 1000:
-                flush_buffer()
-                current_prefix = prefix
+            if current_lines >= MAX_LINES or (current_bytes + rule_bytes) > MAX_BYTES:
+                rotate_io()
                 
-            current_suffixes.append(suffix)
+            file_pointer.write(formatted_rule + '\n')
+            current_lines += 1
+            current_bytes += rule_bytes
                 
-    flush_buffer()
     if file_pointer: file_pointer.close()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("ERROR: Target filename required as ARG[1].")
+        print("ERROR: EXEC_HALT. Target filename required as ARG[1].")
         sys.exit(1)
         
     execute_tier1_chunking(sys.argv[1])
