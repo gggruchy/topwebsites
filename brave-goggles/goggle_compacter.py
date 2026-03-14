@@ -10,7 +10,6 @@ def validate_limits(instruction: str) -> bool:
 
 def translate_to_regex(token: str) -> str:
     escaped = token.replace('\\', r'\\')
-    # TARGET_LOCK: Exclude ^ from native escaping to allow structural translation
     meta_chars = ['.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '$']
     for char in meta_chars:
         escaped = escaped.replace(char, '\\' + char)
@@ -30,11 +29,9 @@ def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
         if target.startswith('site='):
             target = target[len('site='):]
             
-        # TARGET_LOCK: Exploit default Goggles engine discard state
         if directive == '$discard':
             return "TRANSPILE_DISCARD", target
             
-        # Other directives ($boost, $downrank) cannot be regexed natively
         return None, instruction
         
     if '/' in instruction:
@@ -53,14 +50,13 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     def compile_group(grp: List[str]) -> str:
         if len(grp) == 1:
             if prefix == "TRANSPILE_DISCARD":
-                # Maintain highest efficiency for unmerged singletons
-                return f"$discard,{grp[0]}"
+                # TARGET_LOCK: Restore mandatory 'site=' parameter for AST singleton compliance
+                return f"$discard,site={grp[0]}"
             return f"{prefix}{grp[0]}"
             
         joined = "|".join(translate_to_regex(s) for s in grp)
         
         if prefix == "TRANSPILE_DISCARD":
-            # Native regex acts as an absolute discard block automatically
             return f"/(?:{joined})/"
         elif prefix.endswith('/'):
             base_escaped = translate_to_regex(prefix[:-1])
