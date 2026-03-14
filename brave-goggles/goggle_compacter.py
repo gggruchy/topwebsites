@@ -9,15 +9,10 @@ def validate_limits(instruction: str) -> bool:
     return True
 
 def translate_to_regex(token: str) -> str:
-    """
-    TARGET_LOCK: Custom RE2 structural escape. Bypasses Python's native re.escape
-    to prevent strict RE2 parser crashes on hyphens (e.g., \\- in just-eat.co.uk).
-    """
     escaped = token.replace('\\', r'\\')
     meta_chars = ['.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '$']
     for char in meta_chars:
         escaped = escaped.replace(char, '\\' + char)
-        
     escaped = escaped.replace('*', '.*')
     escaped = escaped.replace('^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
     return escaped
@@ -49,19 +44,16 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     current_group = []
     
     def compile_group(grp: List[str]) -> str:
-        is_directive = prefix.startswith('$') and ',' in prefix
-        
-        # TARGET_LOCK: Output raw ONLY if it's not a directive.
-        if len(grp) == 1 and not is_directive:
+        # TARGET_LOCK: Bypass regex completely for singletons to save engine cycles
+        if len(grp) == 1:
             return f"{prefix}{grp[0]}"
             
         joined = "|".join(translate_to_regex(s) for s in grp)
+        is_directive = prefix.startswith('$') and ',' in prefix
         
-        # TARGET_LOCK: Force (?:) non-capturing groups to save engine memory.
-        # Force regex wrap on all directives (even length 1) to eliminate AST crashes.
+        # TARGET_LOCK: Restores AST-compliant PREFIX notation (e.g., $discard,/(?:a|b)/)
         if is_directive:
-            directive = prefix.split(',')[0] 
-            return f"/(?:{joined})/{directive}"
+            return f"{prefix}/(?:{joined})/"
         elif prefix.endswith('/'):
             base_escaped = translate_to_regex(prefix[:-1])
             return f"/{base_escaped}\\/(?:{joined})/"
