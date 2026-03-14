@@ -50,7 +50,7 @@ def execute_chunking(input_file: str, output_prefix: str = "optimized_goggles"):
     Max Bytes: 2MB. Max Lines: 100,000.
     """
     MAX_LINES = 100000
-    MAX_BYTES = 2 * 1024 * 1024
+    MAX_BYTES = 2 * 1000 * 1000
     
     valid_rules = []
     if not os.path.exists(input_file):
