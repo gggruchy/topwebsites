@@ -1,6 +1,5 @@
 import sys
 import os
-import re
 from typing import List, Tuple
 
 def validate_limits(instruction: str) -> bool:
@@ -10,11 +9,17 @@ def validate_limits(instruction: str) -> bool:
     return True
 
 def translate_to_regex(token: str) -> str:
-    escaped = re.escape(token)
-    # TARGET_LOCK: Force forward slash escape. Prevents Adblock regex boundary rupture.
-    escaped = escaped.replace('/', r'\/') 
-    escaped = escaped.replace(r'\*', '.*')
-    escaped = escaped.replace(r'\^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
+    """
+    TARGET_LOCK: Custom RE2 structural escape. Bypasses Python's native re.escape
+    to prevent strict RE2 parser crashes on hyphens (e.g., \\- in just-eat.co.uk).
+    """
+    escaped = token.replace('\\', r'\\')
+    meta_chars = ['.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '$']
+    for char in meta_chars:
+        escaped = escaped.replace(char, '\\' + char)
+        
+    escaped = escaped.replace('*', '.*')
+    escaped = escaped.replace('^', r'(?:[^a-zA-Z0-9_%\.-]|$)')
     return escaped
 
 def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
@@ -24,7 +29,6 @@ def extract_prefix_suffix(instruction: str) -> Tuple[str, str]:
     if any(op in instruction for op in ['||', '@@', '|']) and not instruction.startswith('$'):
         return None, instruction
         
-    # TARGET_LOCK: Isolates Goggles directives ($discard, $boost=2) and strips illegal 'site=' 
     if instruction.startswith('$') and ',' in instruction:
         directive, target = instruction.split(',', 1)
         if target.startswith('site='):
@@ -41,29 +45,29 @@ def pack_regex_nodes(prefix: str, suffixes: List[str]) -> List[str]:
     if not prefix: return suffixes
     
     unique_suffixes = list(dict.fromkeys(suffixes))
-    if len(unique_suffixes) == 1:
-        return [f"{prefix}{unique_suffixes[0]}"]
-        
     packed_rules = []
     current_group = []
     
     def compile_group(grp: List[str]) -> str:
-        if len(grp) == 1: return f"{prefix}{grp[0]}"
+        is_directive = prefix.startswith('$') and ',' in prefix
+        
+        # TARGET_LOCK: Output raw ONLY if it's not a directive.
+        if len(grp) == 1 and not is_directive:
+            return f"{prefix}{grp[0]}"
+            
         joined = "|".join(translate_to_regex(s) for s in grp)
         
-        # TARGET_LOCK: Inverts directive to strict Adblock postfix regex syntax
-        if prefix.startswith('$') and ',' in prefix:
+        # TARGET_LOCK: Force (?:) non-capturing groups to save engine memory.
+        # Force regex wrap on all directives (even length 1) to eliminate AST crashes.
+        if is_directive:
             directive = prefix.split(',')[0] 
-            return f"/({joined})/{directive}"
-            
+            return f"/(?:{joined})/{directive}"
         elif prefix.endswith('/'):
             base_escaped = translate_to_regex(prefix[:-1])
-            return f"/{base_escaped}\\/({joined})/"
-            
+            return f"/{base_escaped}\\/(?:{joined})/"
         else:
-            # TARGET_LOCK: Forces absolute regex boundaries on all alternations
             base_escaped = translate_to_regex(prefix)
-            return f"/{base_escaped}({joined})/"
+            return f"/{base_escaped}(?:{joined})/"
 
     for suffix in unique_suffixes:
         current_group.append(suffix)
